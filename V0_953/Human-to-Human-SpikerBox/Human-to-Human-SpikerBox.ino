@@ -55,7 +55,7 @@
 */
 
 #define FREQUENCY_OF_STIMULATION 10.0 //In Hz
-#define TENS_OF_MICROSECONDS_LENGTH_OF_STIMULATION 8 //80uSec (can not be greater than 10)
+#define TENS_OF_MICROSECONDS_PULSE_WIDTH 8 //80uSec (can not be greater than 10)
 float percentageOfStimulationInSixSeconds = 50.0;
 
 #include <avr/sleep.h>//this AVR library contains the methods that controls the sleep modes
@@ -613,7 +613,7 @@ void serialEvent()
 ISR(TIMER1_COMPA_vect) {
 PORTC |= B00001000; //debug
   counterOfPeriods++;
-  if(counterOfPeriods == TENS_OF_MICROSECONDS_LENGTH_OF_STIMULATION)
+  if(counterOfPeriods == TENS_OF_MICROSECONDS_PULSE_WIDTH)
   {
       PORTB &= B11111101;//PB1 (D9) high freq stim  
   }
