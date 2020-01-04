@@ -199,7 +199,7 @@ void setup()
   while(1)
   {
       potValue = analogRead(A1);
-      if(potValue == 0)
+      if(potValue <8)
       {
         break; 
       }
