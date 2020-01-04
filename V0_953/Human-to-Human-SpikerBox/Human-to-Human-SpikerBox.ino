@@ -1,6 +1,6 @@
 /*
     ----------------------------------------------------------------------------------------------------
-    Backyard Brains 20. Dec. 2019
+    Backyard Brains 04. Jan. 2020
 
     Made for HHI SpikerBox V1(0.953)
     Based on Arduino UNO ATMEGA 328
@@ -42,13 +42,14 @@
     D13 - VU LED 6
 
 
-    V0.6
+    V0.7
     History:
     V0.2 Glitches in communication fixed in V0.2 amd sampling frequency lower.
     V0.3 Serial communication implemented with Serial.write and batery voltage is measured every 3 sec
     V0.4 Block of TENS after long activation
     V0.5 Block TENS from starting if potentiometer is not at minimum
     V0.6 Main timer now works 10 times the sampling freq. so that we can have greater resolution for width of stimulation pulse
+    V0.7 Threshold value for safenet changed from zero to 8
     Written by Stanislav Mircic
 
     ----------------------------------------------------------------------------------------------------
