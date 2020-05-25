@@ -29,11 +29,11 @@
     D0  - Rx
     D1  - Tx
     D2  - VU LED 2
-    D3  - aux button
+    D3  - Sensitivity selection button input
     D4  - Red LED - Low Battery indicator
     D5  - TENS ON/OFF control output
     D6  - Green LED - power ON LED
-    D7  - Sensitivity selection button input
+    D7  - YELOW LED
     D8  - VU LED 1
     D9  - Pulse generator output for TENS
     D10 - VU LED 3
@@ -54,10 +54,18 @@
 
     ----------------------------------------------------------------------------------------------------
 */
-
-#define FREQUENCY_OF_STIMULATION 10.0 //In Hz
+//Length of stimulation period expressed in 100usec
+#define LENGTH_OF_AUTOMATIC_STIMULATION 10000
+//Length of silent period between two stimulations in 100usec
+#define LENGTH_OF_PAUSE_BETWEEN_STIMULATION 30000
+//stimulation frequencies
+int stimFrequencies[6] = {10,15,25,40,70,100};
 #define TENS_OF_MICROSECONDS_PULSE_WIDTH 8 //80uSec (can not be greater than 10)
 float percentageOfStimulationInSixSeconds = 50.0;
+
+
+volatile uint16_t counterForAutomaticStimulation = 0;
+
 
 #include <avr/sleep.h>//this AVR library contains the methods that controls the sleep modes
 float lowPowerVoltage = 8.1;//In volts
@@ -100,6 +108,7 @@ volatile uint16_t baterySample = 0;
 byte messageBuffer[MESSAGE_BUFFER_SIZE];        //buffer used to send messages to serial (to PC)
 #define ESCAPE_SEQUENCE_LENGTH 6                //length of escape sequence that is used when sending messages to PC
 
+
 byte escapeSequence[ESCAPE_SEQUENCE_LENGTH] = {255, 255, 1, 1, 128, 255};       //start escape sequence
 byte endOfescapeSequence[ESCAPE_SEQUENCE_LENGTH] = {255, 255, 1, 1, 129, 255};  //end escape sequence
 
@@ -113,7 +122,7 @@ int incrementsForLEDThr[] = {28, 53, 81, 108, 135, 161};      //threshold interv
 //for example:for value = 28. EMG envelope needs to increase 28
 //AD units to light up one more LED
 
-int8_t lastSensitivitiesIndex = 2;                               //index of sensitivity from sensitivities[] that is currently in use
+int8_t lastSensitivitiesIndex = 0;                               //index of sensitivity from sensitivities[] that is currently in use
 byte sensitivityButtonPressed = 0;                            //used to ignore glitches from button bounce
 uint16_t sensitivityVisualFeedbackCounter = 0;                //timer counter that holds selected sensitivity LED ON when user changes
 //sensitivity with button press
@@ -168,13 +177,14 @@ void setup()
   pinMode(11, OUTPUT);                                  //VU LED 4 PB3
   pinMode(12, OUTPUT);                                  //VU LED 5 PB4
   pinMode(13, OUTPUT);                                  //VU LED 6 PB5
-  pinMode(7, OUTPUT);
+
   pinMode(5, OUTPUT);                                   //TENS ON/OFF control output - PD5
   pinMode(9, OUTPUT);                                   //Pulse generator output     - PB1
 
   pinMode(SENSITIVITY_BUTTON_PIN, INPUT);               //sensitivity button pin
   pinMode(3, INPUT);                                    //aux. button
 
+  pinMode(7, OUTPUT);                                   //yelow LED
   pinMode(4, OUTPUT);                                   //Red LED output  - low power - PD4
   pinMode(6, OUTPUT);                                   //Green LED output - power ON - PD6
 
@@ -226,6 +236,7 @@ void setup()
   digitalWrite(6, LOW); 
   //Turn off base current on driving transistor
   digitalWrite(5,LOW);
+  digitalWrite(8, HIGH); //first stimulation active (LED)
 
 
 
@@ -286,7 +297,7 @@ void setup()
   //set sensitivity and all variables that depend on sensitivity depending on lastSensitivitiesIndex
   incrementForLEDThreshold = incrementsForLEDThr[lastSensitivitiesIndex];
 
-  periodOfStimulationExpressedInPeriodsOfSampling = 10000 / FREQUENCY_OF_STIMULATION;
+  periodOfStimulationExpressedInPeriodsOfSampling = 10000 /stimFrequencies[lastSensitivitiesIndex];
   counterForPeriodOfStimulation = periodOfStimulationExpressedInPeriodsOfSampling;
 
   sei();                                                //enable Global Interrupts
@@ -304,6 +315,8 @@ void setup()
 
 void loop()
 {
+
+
 
 
   //do the auxiliary computation once per timer interrupt
@@ -353,119 +366,43 @@ void loop()
     //----------------------- POWER MANAGEMENT --------------------------
 
 
-    if (sensitivityVisualFeedbackCounter == 0) //disable update of LEDs when we display selected sensitivity level
-    {
-
-      //--------------- CALCULATE ENVELOPE ------------------------
-      tempEnvValue = emgSample;
-      if (tempEnvValue < NOISE_FLOOR_FOR_ENVELOPE)
-      {
-        tempEnvValue = 0;
-      }
-      else
-      {
-        tempEnvValue = tempEnvValue - NOISE_FLOOR_FOR_ENVELOPE;
-      }
-      tempEnvValue = tempEnvValue << 1;
-
-      if (envelopeFirstChanel < tempEnvValue)
-      {
-        envelopeFirstChanel = tempEnvValue;
-      }
-      //-----------------------------------------------------------
-
-
-      //-------------- REFRESH LED STATES -------------------------
-      movingThresholdSum = 30;//set initial threshold for first LED
-      //VU LED 1 PB0
-      if (envelopeFirstChanel > movingThresholdSum)
-      {
-        PORTB |= B00000001;//we set directly bit on port since it is faster than digitalWrite
-      }
-      else
-      {
-        PORTB &= B11111110;//turn OFF LED
-      }
-      movingThresholdSum += incrementForLEDThreshold; //increment threshold for next LED
-      //VU LED 2 PD2
-      if (envelopeFirstChanel > movingThresholdSum)
-      {
-        PORTD |= B00000100;
-      }
-      else
-      {
-        PORTD &= B11111011;
-      }
-      movingThresholdSum += incrementForLEDThreshold; //increment threshold for next LED
-      //VU LED 3 PB2
-      if (envelopeFirstChanel > movingThresholdSum)
-      {
-        PORTB |= B00000100;//turn ON LED
-      }
-      else
-      {
-        PORTB &= B11111011;//turn OFF LED
-      }
-      movingThresholdSum += incrementForLEDThreshold; //increment threshold for next LED
-      //VU LED 4 PB3
-      if (envelopeFirstChanel > movingThresholdSum)
-      {
-        PORTB |= B00001000;//turn ON LED
-      }
-      else
-      {
-        PORTB &= B11110111;//turn OFF LED
-      }
-
-      //---------------------------------------- STIMULATION THRESHOLD ----------------------------------
+   
+      //---------------------------------------- STIMULATION  ----------------------------------
       //check if we should activate stimulation
 
-      if (envelopeFirstChanel > movingThresholdSum)
+
+
+      if(counterForAutomaticStimulation>0)
       {
-        emgCrossedTheThreshold = 1;
-        stimulationTimeCounter++;
-        if (stimulationTimeCounter > maxStimulationSamples)
+         
+        counterForAutomaticStimulation--;
+        if(counterForAutomaticStimulation<LENGTH_OF_AUTOMATIC_STIMULATION)
         {
-          digitalWrite(7, LOW);
-          stimulationEnabled = false;
-          stimulationTimeCounter = maxStimulationSamples;
-        }
-      }
-      else
-      {
-        emgCrossedTheThreshold = 0;
-        if (stimulationTimeCounter > 0)
-        {
-          stimulationTimeCounter--;
+          stimulationEnabled = true;
+          emgCrossedTheThreshold = 1;
+
+          
         }
         else
         {
-          stimulationEnabled = true;
+          stimulationEnabled = false;  
+          emgCrossedTheThreshold = 0;
         }
+        
       }
+      else
+      {
+       
+          counterForAutomaticStimulation = LENGTH_OF_AUTOMATIC_STIMULATION+LENGTH_OF_PAUSE_BETWEEN_STIMULATION;
+           
+      }
+      
+
+    
       //-------------------------------------------------------------------------------------------------
 
-      movingThresholdSum += incrementForLEDThreshold; //increment threshold for next LED
-      //VU LED 5 PB4
-      if (envelopeFirstChanel > movingThresholdSum)
-      {
-        PORTB |= B00010000;//turn ON LED
-      }
-      else
-      {
-        PORTB &= B11101111;//turn OFF LED
-      }
-      movingThresholdSum += incrementForLEDThreshold; //increment threshold for next LED
-      //VU LED 6 PB5
-      if (envelopeFirstChanel > movingThresholdSum)
-      {
-        PORTB |= B00100000;//turn ON LED
-      }
-      else
-      {
-        PORTB &= B11011111;//turn OFF LED
-      }
-
+      if (sensitivityVisualFeedbackCounter == 0) //disable update of LEDs when we display selected sensitivity level
+    {
 
       //---------------------------------- SENSITIVITY BUTTON -----------------------------------------------
 
@@ -482,48 +419,34 @@ void loop()
           //turn OFF TENS
           PORTD &= B11011111;// PD5
           PORTB &= B11111101;//PB1
-          while (digitalRead(SENSITIVITY_BUTTON_PIN) == HIGH) {
-            count = count + 1;
-          }
-          if (count <= 75000 && count > 1) {
-            lastSensitivitiesIndex++;
-            if (lastSensitivitiesIndex == 6)
-            {
-              lastSensitivitiesIndex = 0;
-            }
-          }
-          if (count > 75001) {
-            lastSensitivitiesIndex--;
-            if (lastSensitivitiesIndex < 0)
-            {
-              lastSensitivitiesIndex = 5;
-            }
-          }
-          count = 0;
-          //change sensitivity and all other variables that depend on sensitivity
-          //lastSensitivitiesIndex++;
 
-
-          //get current sensitivity value
-          incrementForLEDThreshold = incrementsForLEDThr[lastSensitivitiesIndex];
-
-          //          //turn OFF all leds
-          //          PORTB &= B11000010;
-          //          PORTD &= B11111011;
-          //
-          //          //turn OFF TENS
-          //          PORTD &= B11011111;// PD5
-          //          PORTB &= B11111101;//PB1
-
-          //Turn ON only one LED that represent sensitivity level
-          if (lastSensitivitiesIndex == 1)
+          lastSensitivitiesIndex++;
+          if (lastSensitivitiesIndex == 6)
           {
-            PORTD |= B00000100;
+            lastSensitivitiesIndex = 0;
           }
-          else
+
+          
+         periodOfStimulationExpressedInPeriodsOfSampling = 10000 / stimFrequencies[lastSensitivitiesIndex];
+         counterForPeriodOfStimulation = periodOfStimulationExpressedInPeriodsOfSampling;
+
+
+
+          for (int i=0;i<6;i++)
           {
-            tempCalcByteMask = 1 << lastSensitivitiesIndex;
-            PORTB |= tempCalcByteMask;//light up one LED for visual feedback of sensitivity
+                if(i<=lastSensitivitiesIndex)
+                {
+                    //Turn ON only one LED that represent sensitivity level
+                    if (i == 1)
+                    {
+                      PORTD |= B00000100;
+                    }
+                    else
+                    {
+                      tempCalcByteMask = 1 << i;
+                      PORTB |= tempCalcByteMask;//light up one LED for visual feedback of sensitivity
+                    }
+                }
           }
           sensitivityVisualFeedbackCounter = sensitivityVisualFeedbackCounterMax;//set timer for visual feedback
         }
@@ -542,26 +465,8 @@ void loop()
     }
 
 
-    //---------------------------------------- DECAY OF ENVELOPE ------------------------------------------
-
-    envelopeDecrementCounter++;
-
-    if (envelopeDecrementCounter == MAX_ENV_DECREMENT_COUNTER)
-    {
-      envelopeDecrementCounter = 0;
-
-      if (envelopeFirstChanel > 0)
-      {
-        //envelope decay is 1 AD unit per one sample period. At 10kHz sampling rate
-        // it is 10000*(5V/1024) per second. So it will linearly decay 5V in 10ms.
-        //It is fast. Maybe we should slower down it here.
-        envelopeFirstChanel--;
-      }
-
-    }
 
 
-//debug
    
 
     }//end of aux. computation
@@ -574,7 +479,7 @@ void loop()
   {
    
   
-    PORTC |= B00000100;   //debug
+    
 
     outputBufferReady = 0;//this will be zero until we send whole frame buffer and fill it again
     //since we want to do aux computation (LEDs, relay, servo) only once per sample period
@@ -584,7 +489,7 @@ void loop()
 
     //Sends first byte of frame. The rest is sent by TX handler.
     Serial.write(outputFrameBuffer, 2);
-    PORTC &= B11101011;//debug
+
   }//end of detection of fresh frame data
 
 
@@ -594,6 +499,7 @@ void loop()
     messageSending = 0;
     Serial.write(messageBuffer, lengthOfMessasge - 1);
   }
+  
 
 }//end of main loop
 //---------------------------------------------- END OF MAIN LOOP ---------------------------------------------------------
@@ -612,7 +518,7 @@ void serialEvent()
 
 //------------------------------------------ SAMPLING TIMER INTERRUPT --------------------------------------------------
 ISR(TIMER1_COMPA_vect) {
-PORTC |= B00001000; //debug
+
   counterOfPeriods++;
   if(counterOfPeriods == TENS_OF_MICROSECONDS_PULSE_WIDTH)
   {
@@ -662,7 +568,7 @@ PORTC |= B00001000; //debug
             outputBufferReady = 1;      
   }
   
-  PORTC &= B11110111; //debug
+ 
 }
 
 

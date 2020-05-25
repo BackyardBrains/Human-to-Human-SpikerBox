@@ -1,4 +1,5 @@
 # Human to Human SpikerBox
 
-This is repository for BackyardBrains' Human to Human SpikerBox product.
+This branch is used for testing of stimulation parameters.
+Do not upload this code!
 
