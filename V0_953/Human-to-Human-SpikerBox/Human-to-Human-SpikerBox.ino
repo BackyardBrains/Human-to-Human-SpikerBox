@@ -1,56 +1,11 @@
 /*
     ----------------------------------------------------------------------------------------------------
-    Backyard Brains 04. Jan. 2020
+    Backyard Brains 25. May 2020
 
     Made for HHI SpikerBox V1(0.953)
-    Based on Arduino UNO ATMEGA 328
-
-    TENS device with communication with Spike Recorder
-
-    Parameters of stimulation are fixed:
-    Pulse width: 80 micro seconds
-    Frequency:   10Hz
-
-    Code sends RAW emg to Spike Recorder via serial interface. It is calculating envelope based on RAW EMG
-    that is expected to float on Vcc/2. Based on envelope it updates VU meter and creates stimulation square
-    wave for TENS when envelope crosses the threshold.
-    Threshold can be changed with press of the button on D7.
 
 
-    A0 - EMG input
-    A1 - used to detect position of potentiometer
-    A2 - ---
-    A3 - ---
-    A4 - ---
-    A5 - Batery voltage input
-
-
-
-    D0  - Rx
-    D1  - Tx
-    D2  - VU LED 2
-    D3  - Sensitivity selection button input
-    D4  - Red LED - Low Battery indicator
-    D5  - TENS ON/OFF control output
-    D6  - Green LED - power ON LED
-    D7  - YELOW LED
-    D8  - VU LED 1
-    D9  - Pulse generator output for TENS
-    D10 - VU LED 3
-    D11 - VU LED 4
-    D12 - VU LED 5
-    D13 - VU LED 6
-
-
-    V0.7
-    History:
-    V0.2 Glitches in communication fixed in V0.2 amd sampling frequency lower.
-    V0.3 Serial communication implemented with Serial.write and batery voltage is measured every 3 sec
-    V0.4 Block of TENS after long activation
-    V0.5 Block TENS from starting if potentiometer is not at minimum
-    V0.6 Main timer now works 10 times the sampling freq. so that we can have greater resolution for width of stimulation pulse
-    V0.7 Threshold value for safenet changed from zero to 8
-    Written by Stanislav Mircic
+    Code is made for testing of parameters of stimulation. DO not use for any other purpose.
 
     ----------------------------------------------------------------------------------------------------
 */
